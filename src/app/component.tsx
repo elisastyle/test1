@@ -53,32 +53,21 @@ const isAwayHeartRed = user && isTeamFavorite(match.away); // چک کردن وض
 // --- بخش اصلاح شده در MatchCard ---
 
 // 1. استخراج داده‌های این مسابقه خاص با استفاده از ID منحصر به فرد آن
-const predictionData = userPredictions?.[match.id];
-
-const hasPrediction =
-  !!predictionData &&
-  !!predictionData.prediction &&
-  predictionData.prediction.trim().length > 0;
+const prediction = userPredictions?.[match.id];
+const hasPrediction = !!prediction?.prediction;
 
 const predictionTimeLimit = 55;
 const isLocked = currentSec >= predictionTimeLimit;
 
-const canEdit = user && hasPrediction && !isLocked;
-const buttonClassName = !user
-  ? "bg-gray-500 cursor-not-allowed"
-  : isLocked
-  ? "bg-blue-600 hover:bg-blue-500" // قفل است، دکمه عادی
-  : hasPrediction // اگر پیش‌بینی دارد و قفل نیست -> ویرایش
-  ? "bg-yellow-500 hover:bg-yellow-400"
-  : "bg-blue-600 hover:bg-blue-500"; // اگر پیش‌بینی ندارد و قفل نیست -> پیش‌بینی
-// ----------------------------------
-
-// برای متن دکمه
+// تعیین متن دکمه با اولویت‌بندی درست
 let buttonText = "پیش‌بینی";
+let buttonClassName = "bg-blue-600 hover:bg-blue-500";
+
+
 if (!user) {
   buttonText = "وارد شوید";
 } else if (isLocked) {
-  buttonText = "پیش‌بینی"; // یا "بسته شد"
+  buttonText = "زمان تمام شد";
 } else if (hasPrediction) {
   buttonText = "ویرایش پیش‌بینی";
 }

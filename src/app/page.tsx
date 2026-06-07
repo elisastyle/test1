@@ -131,10 +131,8 @@ export default function Footballino() {
     const savedUser = localStorage.getItem("user");
     if (savedUser) setUser(savedUser);
 
-    const savedPredictions = localStorage.getItem("userPredictions");
-    if (savedPredictions) {
-      setUserPredictions(JSON.parse(savedPredictions));
-    }
+    const savedPredictions = localStorage.getItem(`userPredictions_${user}`);
+
 
     const savedFavs = localStorage.getItem("favoriteTeams");
     if (savedFavs) {
@@ -143,26 +141,76 @@ export default function Footballino() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("userPredictions", JSON.stringify(userPredictions));
+    if (user) {
+  localStorage.setItem(`userPredictions_${user}`, JSON.stringify(userPredictions));
+}
+
   }, [userPredictions]);
 
   useEffect(() => {
     localStorage.setItem("favoriteTeams", JSON.stringify(favoriteTeams));
   }, [favoriteTeams]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMatches((prev) =>
-        prev.map((match) => {
-          const change = Math.floor(Math.random() * 1001) - 500;
-          const newSpectators = Math.max(1000, match.spectators + change);
-          return { ...match, spectators: newSpectators };
-        })
-      );
-    }, 5000);
+ useEffect(() => {
+  const t = setInterval(() => {
+    setCurrentSec((prev) => {
 
-    return () => clearInterval(interval);
-  }, []);
+      // ✅ اگر زمان راند تمام شده
+      if (prev >= 59) {
+
+        // ✅ محاسبه اختلاف و دادن کوین
+        if (user) {
+
+          Object.keys(userPredictions).forEach((matchId) => {
+
+            const pred = userPredictions[matchId]?.prediction;
+            const match = matches.find((m) => m.id === matchId);
+
+            if (!match || !pred) return;
+
+            const predictedValue = parseInt(pred, 10);
+            const diff = Math.abs(match.spectators - predictedValue);
+
+            let coinsEarned = 0;
+
+            if (diff === 0) coinsEarned = 10;
+            else if (diff <= 10) coinsEarned = 8;
+            else if (diff <= 30) coinsEarned = 5;
+            else if (diff <= 100) coinsEarned = 3;
+
+            setCoins((prevCoins) => prevCoins + coinsEarned);
+
+          });
+
+        }
+
+        // ✅ پاک کردن پیش‌بینی‌ها
+        setUserPredictions({});
+
+        if (user) {
+          localStorage.removeItem(`userPredictions_${user}`);
+        }
+
+        // ✅ ساخت راند جدید (ID جدید برای مسابقات)
+        setMatches((oldMatches) =>
+          oldMatches.map((m) => ({
+            ...m,
+            id: crypto.randomUUID(),
+            start: Date.now(),
+          }))
+        );
+
+        return 0; // ریست تایمر
+      }
+
+      return prev + 1;
+    });
+  }, 1000);
+
+  return () => clearInterval(t);
+}, [user, userPredictions, matches]);
+
+
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -248,37 +296,17 @@ export default function Footballino() {
     const existingPrediction = userPredictions[selectedMatch.id];
     const isEditing = !!existingPrediction && currentSec <= 55;
 
-    const predictedValue = parseInt(prediction, 10);
-    const diff = Math.abs(selectedMatch.spectators - predictedValue);
     
-    let coinsEarned = 0;
+  setUserPredictions((prev) => ({
+  ...prev,
+  [selectedMatch.id]: { prediction, timestamp: Date.now() },
+}));
 
-     if (diff === 0) { // دقیقاً درست حدس زد
-      coinsEarned = 10;
-      showToast("عالی! دقیقاً درست حدس زدی! ۱۰ کوین دریافت کردی!", "success");
-    } else if (diff <= 10) { // اختلاف حداکثر ۱۰ نفر
-      coinsEarned = 8;
-      showToast(`خیلی نزدیک بود! ${diff} نفر اختلاف. ۸ کوین دریافت کردی!`, "success");
-    } else if (diff <= 30) { // اختلاف حداکثر ۳۰ نفر
-      coinsEarned = 5;
-      showToast(`نزدیک بود! ${diff} نفر اختلاف. ۵ کوین دریافت کردی!`, "success");
-    } else if (diff <= 100) { // اختلاف حداکثر ۱۰۰ نفر
-      coinsEarned = 3;
-      showToast(`حدودی درست بود! ${diff} نفر اختلاف. ۳ کوین دریافت کردی!`, "success");
-    } else { // اختلاف بیشتر از ۱۰۰ نفر
-      coinsEarned = 0;
-      showToast(`حدس شما ${diff} نفر اختلاف داشت. کوینی دریافت نکردید.`, "info");
-    }
-    setCoins((prev) => prev + coinsEarned);
+showToast("پیش‌بینی ثبت شد ✅", "success");
 
-    setUserPredictions((prev) => ({
-      ...prev,
-      [selectedMatch.id]: { prediction, timestamp: Date.now() },
-    }));
-
-    setSelectedMatch(null);
-    setPrediction("");
-  };
+setSelectedMatch(null);
+setPrediction("");
+};
 
   return (
     <div
@@ -395,27 +423,28 @@ export default function Footballino() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8 max-w-4xl mx-auto px-4">
         {loading
-          ? Array.from({ length: 3 }).map((_, i) => <MatchSkeleton key={i} />)
-          : matches.map((match) => (
-              <MatchCard
-                key={match.id}
-                match={match}
-                theme={theme}
-                currentSec={currentSec}
-                userPredictions={userPredictions}
-                user={user}
-                isTeamFavorite={(team) => favoriteTeams.includes(team)}
-                toggleFavoriteTeam={toggleFavoriteTeam}
-                onPredict={(selected) => {
-                  if (!user) {
-                    showToast("برای پیش‌بینی باید وارد شوید", "error");
-                    return;
-                  }
-                  setSelectedMatch(selected);
-                }}
-              />
-            ))}
-      </div>
+    ? Array.from({ length: 3 }).map((_, i) => <MatchSkeleton key={i} />)
+    : matches.map((match) => (
+        <MatchCard
+          key={match.id}
+          match={match}
+          theme={theme}
+          currentSec={currentSec}
+          userPredictions={user ? userPredictions : {}}
+          user={user}
+          isTeamFavorite={(team) => favoriteTeams.includes(team)}
+          toggleFavoriteTeam={toggleFavoriteTeam}
+          onPredict={(selected) => {
+            if (!user) {
+              showToast("برای پیش‌بینی باید وارد شوید", "error");
+              setShowAuthModal(true);
+              return;
+            }
+            setSelectedMatch(selected);
+          }}
+        />
+      ))}
+</div>
 
       <AuthModal
         open={showAuthModal}
